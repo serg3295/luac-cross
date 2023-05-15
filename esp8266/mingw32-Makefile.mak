@@ -1,0 +1,80 @@
+#
+# This is a minimal Make file designed to be called from within a MinGW Cmd prompt.
+# So if the distro ZIP file has been unpacked into C:\nodemcu-firmware then
+#
+# c:\nodemcu-firmware\app\lua53\host\ mingw32-make -f mingw32-Makefile.mak
+#
+# will create the WinX EXE luac.cross.exe within the root C:\nodemcu-firmware folder.
+# This make has been stripped down to use the basic non-graphics MinGW32 install and
+# standard Windows commands available at the Cmd> prompt.  This make is quite separate
+# from the normal toolchain build.
+
+.NOTPARALLEL:
+
+CCFLAGS:= -I. -I.. -I../../include -I../../uzlib -Wall
+LDFLAGS:= -lm -Wl,-Map=mapfile
+DEFINES += -DLUA_OPTIMIZE_MEMORY=2
+
+CFLAGS  = $(CCFLAGS) $(DEFINES)  $(EXTRA_CCFLAGS) $(STD_CFLAGS) $(INCLUDES)
+
+TARGET = host
+CC     := gcc
+
+ifeq ($(FLAVOR),debug)
+    CCFLAGS        += -O0 -g
+    TARGET_LDFLAGS += -O0 -g
+    DEFINES        += -DLUA_DEBUG_BUILD
+else
+    FLAVOR         =  release
+    CCFLAGS        += -O2
+    TARGET_LDFLAGS += -O2
+endif
+#
+# C files needed to compile luac.cross
+#
+LUACSRC := luac.c      liolib.c    loslib.c
+LUASRC  := lapi.c      lauxlib.c   lbaselib.c  lcode.c     ldblib.c    ldebug.c \
+				   lcorolib.c  lctype.c    lutf8lib.c \
+           ldo.c       ldump.c     lfunc.c     lgc.c       linit.c     llex.c \
+           lmathlib.c  lmem.c      loadlib.c   lobject.c   lopcodes.c  lparser.c \
+           lstate.c    lstring.c   lstrlib.c   ltable.c    ltablib.c \
+           ltm.c       lundump.c   lvm.c       lzio.c      lnodemcu.c
+
+UZSRC   := uzlib_deflate.c crc32.c
+#
+# This relies on the files being unique on the vpath
+#
+SRC      := $(LUACSRC) $(LUASRC) $(UZSRC)
+
+vpath %.c .:..:../../libc:../../uzlib
+
+INCS   := -I.. -I../.. -I../../libc -I../../uzlib
+ODIR   := .output\obj
+OBJS   := $(SRC:%.c=$(ODIR)/%.o)
+IMAGE  := ../../../luac.cross.exe
+
+TEST ?=
+ifeq ("$(TEST)","1")
+   DEFINES  += -DLUA_ENABLE_TEST
+   LUACSRC  += ltests.c
+endif  # $(TEST)==1
+
+
+.PHONY: test clean all
+
+all: $(DEPS) $(IMAGE)
+
+$(IMAGE) : $(OBJS)
+	$(CC) $(OBJS) -o $@ $(LDFLAGS)
+
+test :
+	@echo CC: $(CC)
+	@echo SRC: $(SRC)
+	@echo OBJS: $(OBJS)
+
+clean :
+	del /s /q $(ODIR)
+
+$(ODIR)/%.o: %.c
+	@mkdir $(ODIR) || echo .
+	$(CC) $(INCS)  $(CFLAGS) -o $@ -c $<
